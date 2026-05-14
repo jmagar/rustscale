@@ -51,6 +51,8 @@ async fn main() -> Result<()> {
         serve_mcp().await
     } else if stdio_mode {
         serve_stdio_mcp().await
+    } else if let Some((command, json)) = rustscale::setup::SetupCommand::parse(&args)? {
+        rustscale::setup::run(command, json)
     } else if matches!(args.as_slice(), [c] if c == "doctor")
         || matches!(args.as_slice(), [c, _] if c == "doctor")
     {
@@ -188,6 +190,9 @@ fn print_usage() {
   tailscale [serve]                     Start MCP HTTP server (port 40040)
   tailscale mcp                         Start MCP stdio transport
   tailscale doctor [--json]             Validate environment before starting
+  tailscale setup check [--json]        Check local plugin setup
+  tailscale setup repair [--json]       Repair local plugin setup
+  tailscale setup plugin-hook [--no-repair] [--json]
 
 Read:
   tailscale devices [--json]            All devices in the tailnet

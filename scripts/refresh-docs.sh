@@ -107,8 +107,8 @@ main() {
   if [[ "$DRY_RUN" != true ]]; then sd="$(make_tmpdir)"; bs="$sd/before.sha256"; as="$sd/after.sha256"; snapshot_references "$bs"; fi
   mkdir -p "$REF_DIR/tailscale/docs" "$REF_DIR/tailscale/repos" "$REF_DIR/mcp/docs" "$REF_DIR/mcp/repos"
   if [[ "$SKIP_CRAWL" != true ]]; then
-    crawl_docs "https://tailscale.com/api"          "tailscale.com"           "tailscale/docs"
-    crawl_docs "https://modelcontextprotocol.io"    "modelcontextprotocol.io" "mcp/docs"
+    crawl_docs "https://tailscale.com/api" || log "WARN: tailscale docs crawl failed, continuing"          "tailscale.com"           "tailscale/docs"
+    crawl_docs "https://modelcontextprotocol.io"    "modelcontextprotocol.io" "mcp/docs" || log "WARN: mcp docs crawl failed, continuing"
   fi
   if [[ "$SKIP_REPOMIX" != true ]]; then
     # Tailscale Go source — filter to API-relevant paths (client/types, not full binary)

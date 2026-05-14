@@ -10,7 +10,6 @@ services:
       dockerfile: config/Dockerfile
     container_name: tailscale-mcp
     restart: unless-stopped
-    user: "${TAILSCALE_UID:-1000}:${TAILSCALE_GID:-1000}"
     env_file:
       - path: .env
         required: false

@@ -93,7 +93,6 @@ fn parse_delete_device_with_confirm() {
 }
 
 #[test]
-#[test]
 fn parse_doctor() {
     let args = args(&["doctor"]);
     let (cmd, json) = CliCommand::parse(&args).expect("should parse");
@@ -129,6 +128,20 @@ fn json_flag_works_with_short_form() {
     let (cmd, json) = CliCommand::parse(&args).expect("should parse");
     assert!(matches!(cmd, CliCommand::Keys));
     assert!(json);
+}
+
+#[test]
+fn setup_plugin_hook_parse_is_recognized() {
+    let parsed =
+        rustscale::setup::SetupCommand::parse(&args(&["setup", "plugin-hook", "--no-repair"]))
+            .unwrap();
+    assert!(matches!(
+        parsed,
+        Some((
+            rustscale::setup::SetupCommand::PluginHook { no_repair: true },
+            false
+        ))
+    ));
 }
 
 // ── helper ────────────────────────────────────────────────────────────────────

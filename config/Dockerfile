@@ -7,22 +7,24 @@ RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/li
 
 # Cache dependencies — build a dummy binary first so dep compilation is cached
 COPY Cargo.toml Cargo.lock ./
+# Strip xtask workspace member (not in Docker build context)
+RUN sed -i 's/, "xtask"//g; s/"xtask", //g; s/"xtask"//g' Cargo.toml
 RUN --mount=type=cache,id=rustscale-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=rustscale-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=rustscale-cargo-target,target=/app/target,sharing=locked \
-    mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release --locked && rm -rf src
+    mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release --locked -p rustscale && rm -rf src
 
 # Build the real binary
 COPY src/ src/
 RUN --mount=type=cache,id=rustscale-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=rustscale-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=rustscale-cargo-target,target=/app/target,sharing=locked \
-    touch src/main.rs && cargo build --release --locked && \
+    touch src/main.rs && cargo build --release --locked -p rustscale && \
     cp target/release/tailscale /usr/local/bin/tailscale-mcp
 
 # Runtime image
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates curl gosu && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/bin/tailscale-mcp /usr/local/bin/tailscale-mcp
 
@@ -34,7 +36,6 @@ RUN groupadd --gid 1000 rustscale && \
 
 ENV RUST_LOG=info
 
-USER 1000:1000
 
 EXPOSE 40040/tcp
 
@@ -47,4 +48,7 @@ LABEL io.modelcontextprotocol.server.name="tv.tootie/rustscale"
 # conflicting with any Tailscale CLI tooling that might be mounted in.
 # The host-side binary (in bin/) is named tailscale for consistency with
 # Cargo.toml's [[bin]] name.
-CMD ["tailscale-mcp", "serve", "mcp"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["serve", "mcp"]

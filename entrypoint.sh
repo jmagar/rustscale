@@ -54,7 +54,7 @@ if ! chown -R 1000:1000 "${DATA_DIR}" 2>/dev/null; then
 fi
 
 # Verify the data dir is actually writable by UID 1000 before handing off.
-if ! su-exec 1000:1000 sh -c "touch '${DATA_DIR}/.write_test' 2>/dev/null && rm -f '${DATA_DIR}/.write_test'"; then
+if ! gosu 1000:1000 sh -c "touch '${DATA_DIR}/.write_test' 2>/dev/null && rm -f '${DATA_DIR}/.write_test'"; then
     echo "FATAL: ${DATA_DIR} is not writable by UID 1000" >&2
     echo "  Check the volume mount permissions." >&2
     exit 1
@@ -84,9 +84,9 @@ echo "[entrypoint] Tailnet:   ${TAILSCALE_TAILNET}"
 # NOTE: Do NOT log TAILSCALE_API_KEY or TAILSCALE_MCP_TOKEN — these are secrets.
 
 # ── 8. Signal handling ────────────────────────────────────────────────────────
-# Do NOT trap signals here. exec + su-exec replaces this shell with the service
+# Do NOT trap signals here. exec + gosu replaces this shell with the service
 # binary, so signals go directly to the service process for graceful shutdown.
 
 # ── 9. Drop privileges and exec ──────────────────────────────────────────────
 # exec replaces this shell — PID 1 becomes the actual service binary.
-exec su-exec 1000:1000 "${BINARY}" "$@"
+exec gosu 1000:1000 "${BINARY}" "$@"

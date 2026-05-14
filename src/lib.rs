@@ -4,5 +4,6 @@ pub mod config;
 pub mod logging;
 pub mod mcp;
 pub mod observability;
+pub mod setup;
 pub mod tailscale;
 pub mod token_limit;
