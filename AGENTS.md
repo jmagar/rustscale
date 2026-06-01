@@ -104,6 +104,6 @@ bd close <id>         # Complete work
 
 ## Plugin setup hooks
 
-Plugin setup is owned by the binary. Keep `plugins/tailscale/hooks/plugin-setup.sh` as a thin adapter that maps `CLAUDE_PLUGIN_OPTION_*` values to environment variables, prepares appdata, ensures `tailscale` is on `PATH`, and then calls `tailscale setup plugin-hook "$@"`.
+Plugin setup is owned by the binary. `plugins/tailscale/hooks/hooks.json` calls `${CLAUDE_PLUGIN_ROOT}/bin/rtailscale setup plugin-hook` directly (no shell wrapper). The binary's `apply_plugin_options()` (`src/setup.rs`), run at the top of the plugin-hook path, maps `CLAUDE_PLUGIN_OPTION_*` values to the binary's `TAILSCALE_*` env vars (and `CLAUDE_PLUGIN_DATA` → `TAILSCALE_MCP_HOME`); `install_self()` self-installs the binary into `~/.local/bin`.
 
-`tailscale setup check` is read-only, `tailscale setup repair` is idempotent, and `tailscale setup plugin-hook --no-repair` is audit mode. Do not add Docker Compose, systemd, or service bootstrap logic back into the hook script.
+`tailscale setup check` is read-only, `tailscale setup repair` is idempotent, and `tailscale setup plugin-hook --no-repair` is audit mode. Do not add Docker Compose, systemd, or service bootstrap logic into the hook path.

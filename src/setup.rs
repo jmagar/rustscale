@@ -157,7 +157,75 @@ fn install_self() -> Result<PathBuf> {
     Ok(dest)
 }
 
+/// Translate Claude Code plugin options (`CLAUDE_PLUGIN_OPTION_*`) into the
+/// `TAILSCALE_*` process env vars the binary reads, plus the appdata HOME var.
+///
+/// This replaces the former `plugin-setup.sh` wrapper: the binary now owns the
+/// env-var mapping itself, so the plugin hook calls the binary directly. The
+/// setup checks (`appdata_dir`, `port_check`, `binary_check`) read these live
+/// from `std::env`, so mapping here — before `check_report()` — is what makes
+/// them effective. Values containing newlines/CR are skipped, mirroring the
+/// script's `reject_unsafe_value` guard.
+///
+/// The script's `.env`-fallback (re-exporting a previously persisted value when
+/// an option was unset) is intentionally dropped: the binary never persists
+/// option values to `.env` (repair only writes a header comment) and the setup
+/// checks never read that file, so the fallback was immaterial to the hook
+/// contract. The server receives option values via `.mcp.json`'s
+/// `${user_config.*}` block, not the hook's process env.
+fn apply_plugin_options() {
+    // Map CLAUDE_PLUGIN_DATA -> TAILSCALE_MCP_HOME so appdata_dir() resolves to
+    // the plugin's data directory (matching the script's HOME export).
+    if let Some(v) = std::env::var_os("CLAUDE_PLUGIN_DATA") {
+        let s = v.to_string_lossy();
+        if !s.is_empty() && !s.contains('\n') && !s.contains('\r') {
+            std::env::set_var(APPDATA_ENV, v);
+        }
+    }
+
+    // CLAUDE_PLUGIN_OPTION_<OPT> -> <TAILSCALE_ENVVAR>
+    let map = [
+        ("CLAUDE_PLUGIN_OPTION_API_TOKEN", "TAILSCALE_MCP_TOKEN"),
+        ("CLAUDE_PLUGIN_OPTION_NO_AUTH", "TAILSCALE_MCP_NO_AUTH"),
+        ("CLAUDE_PLUGIN_OPTION_MCP_HOST", "TAILSCALE_MCP_HOST"),
+        ("CLAUDE_PLUGIN_OPTION_MCP_PORT", "TAILSCALE_MCP_PORT"),
+        ("CLAUDE_PLUGIN_OPTION_AUTH_MODE", "TAILSCALE_MCP_AUTH_MODE"),
+        ("CLAUDE_PLUGIN_OPTION_PUBLIC_URL", "TAILSCALE_MCP_PUBLIC_URL"),
+        (
+            "CLAUDE_PLUGIN_OPTION_GOOGLE_CLIENT_ID",
+            "TAILSCALE_MCP_GOOGLE_CLIENT_ID",
+        ),
+        (
+            "CLAUDE_PLUGIN_OPTION_GOOGLE_CLIENT_SECRET",
+            "TAILSCALE_MCP_GOOGLE_CLIENT_SECRET",
+        ),
+        (
+            "CLAUDE_PLUGIN_OPTION_AUTH_ADMIN_EMAIL",
+            "TAILSCALE_MCP_AUTH_ADMIN_EMAIL",
+        ),
+        ("CLAUDE_PLUGIN_OPTION_TAILSCALE_API_KEY", "TAILSCALE_API_KEY"),
+        ("CLAUDE_PLUGIN_OPTION_TAILSCALE_TAILNET", "TAILSCALE_TAILNET"),
+        (
+            "CLAUDE_PLUGIN_OPTION_ALLOW_DESTRUCTIVE",
+            "TAILSCALE_ALLOW_DESTRUCTIVE",
+        ),
+    ];
+    for (opt, dest) in map {
+        if let Some(v) = std::env::var_os(opt) {
+            let s = v.to_string_lossy();
+            if s.is_empty() || s.contains('\n') || s.contains('\r') {
+                continue;
+            }
+            // edition 2021: set_var is safe (no unsafe block required).
+            std::env::set_var(dest, v);
+        }
+    }
+}
+
 fn plugin_hook_report(no_repair: bool) -> Result<PluginHookReport> {
+    // Translate CLAUDE_PLUGIN_OPTION_* into TAILSCALE_* env vars before any setup
+    // check reads them. Replaces the deleted plugin-setup.sh wrapper.
+    apply_plugin_options();
     // Keep the user's terminal copy in ~/.local/bin fresh each session so it
     // survives `/plugin update`. Best-effort: never fail the hook over it.
     if let Err(e) = install_self() {

@@ -1,30 +1,12 @@
 use std::{fs, process::Command};
 
 fn tailscale_bin() -> &'static str {
-    env!("CARGO_BIN_EXE_tailscale")
+    env!("CARGO_BIN_EXE_rtailscale")
 }
 
 fn make_fake_binary(dir: &std::path::Path) {
     let path = dir.join("tailscale");
     fs::write(&path, "#!/usr/bin/env sh\nexit 0\n").unwrap();
-    let mut perms = fs::metadata(&path).unwrap().permissions();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        perms.set_mode(0o755);
-    }
-    fs::set_permissions(path, perms).unwrap();
-}
-
-fn make_capture_binary(dir: &std::path::Path, name: &str, env_key: &str) {
-    let path = dir.join(name);
-    fs::write(
-        &path,
-        format!(
-            "#!/usr/bin/env sh\nprintf '%s\\n' \"$*\" > \"$CAPTURE_FILE\"\nprintf '%s\\n' \"${{{env_key}:-}}\" > \"$CAPTURE_ENV_FILE\"\n"
-        ),
-    )
-    .unwrap();
     let mut perms = fs::metadata(&path).unwrap().permissions();
     #[cfg(unix)]
     {
@@ -68,45 +50,73 @@ fn setup_plugin_hook_no_repair_json_contract() {
     assert!(!home.path().join(".tailscale-test").exists());
 }
 
+/// The hook now calls the binary directly (no plugin-setup.sh wrapper). This
+/// verifies `apply_plugin_options()` maps `CLAUDE_PLUGIN_OPTION_*` into the
+/// `TAILSCALE_*` env vars the setup checks read: `CLAUDE_PLUGIN_DATA` reaches
+/// `appdata_dir` and `CLAUDE_PLUGIN_OPTION_MCP_PORT` reaches `port_check`.
 #[test]
-fn plugin_hook_adapter_delegates_to_binary() {
-    let home = tempfile::tempdir().unwrap();
+fn plugin_hook_maps_plugin_options_into_env() {
     let data = tempfile::tempdir().unwrap();
     let bin_dir = tempfile::tempdir().unwrap();
-    let capture_file = home.path().join("args.txt");
-    let capture_env_file = home.path().join("env.txt");
-    make_capture_binary(bin_dir.path(), "tailscale", "TAILSCALE_MCP_TOKEN");
+    make_fake_binary(bin_dir.path());
+    let appdata = data.path().join("appdata");
+    fs::create_dir_all(&appdata).unwrap();
 
-    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("plugins/tailscale/hooks/plugin-setup.sh");
-    let path = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-    let output = Command::new(script)
-        .env("HOME", home.path())
-        .env("PATH", path)
-        .env("CLAUDE_PLUGIN_DATA", data.path())
-        .env("CAPTURE_FILE", &capture_file)
-        .env("CAPTURE_ENV_FILE", &capture_env_file)
-        .env("CLAUDE_PLUGIN_OPTION_API_TOKEN", "test-token")
+    // A free high port to prove the option flows into port_check.
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+
+    let output = Command::new(tailscale_bin())
+        .args(["--json", "setup", "plugin-hook", "--no-repair"])
+        .env_remove("TAILSCALE_MCP_HOME")
+        .env_remove("TAILSCALE_MCP_PORT")
+        .env("PATH", bin_dir.path())
+        .env("CLAUDE_PLUGIN_DATA", &appdata)
+        .env("CLAUDE_PLUGIN_OPTION_MCP_PORT", port.to_string())
         .output()
         .unwrap();
 
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+
+    // appdata_dir resolves to CLAUDE_PLUGIN_DATA (mapped to TAILSCALE_MCP_HOME).
+    let appdata_detail = payload["check"]["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "appdata_dir")
+        .map(|c| c["detail"].as_str().unwrap_or_default().to_string())
+        .unwrap_or_default();
+    assert_eq!(appdata_detail, appdata.display().to_string());
+
+    // port_check targets the mapped CLAUDE_PLUGIN_OPTION_MCP_PORT value.
+    let port_detail = payload["check"]["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "mcp_port")
+        .map(|c| c["detail"].as_str().unwrap_or_default().to_string())
+        .unwrap_or_default();
     assert!(
-        output.status.success(),
-        "stdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        port_detail.contains(&port.to_string()),
+        "port_check detail should mention mapped port {port}, got: {port_detail}"
     );
-    assert_eq!(
-        fs::read_to_string(capture_file).unwrap().trim(),
-        "setup plugin-hook"
-    );
-    assert_eq!(
-        fs::read_to_string(capture_env_file).unwrap().trim(),
-        "test-token"
-    );
-    assert!(data.path().is_dir());
+}
+
+/// The plugin hook config must call the binary directly.
+#[test]
+fn claude_hooks_call_binary_directly() {
+    let hooks_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("plugins/tailscale/hooks/hooks.json");
+    let hooks: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(hooks_path).unwrap()).unwrap();
+    for hook_name in ["SessionStart", "ConfigChange"] {
+        let command = hooks["hooks"][hook_name][0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap();
+        assert_eq!(
+            command,
+            "${CLAUDE_PLUGIN_ROOT}/bin/rtailscale setup plugin-hook"
+        );
+    }
 }
