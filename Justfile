@@ -19,7 +19,7 @@ fmt:
 test:
     cargo test
 
-# Install rustscale binary to ~/.local/bin/tailscale (warns on name conflict)
+# Install rustscale binary to ~/.local/bin/rtailscale (warns on name conflict)
 install: release
     #!/usr/bin/env bash
     set -euo pipefail
@@ -30,7 +30,7 @@ install: release
     if [[ -e "${binary}" && ! -L "${binary}" ]]; then
       echo "WARNING: ${binary} already exists as a regular file." >&2
       echo "         Skipping install to avoid overwriting the real Tailscale CLI." >&2
-      echo "         To force: cp target/release/tailscale ${binary}" >&2
+      echo "         To force: cp target/release/rtailscale ${binary}" >&2
       exit 0
     fi
     if command -v tailscale >/dev/null 2>&1; then
@@ -41,7 +41,7 @@ install: release
         echo "         if ~/.local/bin appears first in PATH." >&2
       fi
     fi
-    install -m 755 "${target_dir}/release/tailscale" "${binary}"
+    install -m 755 "${target_dir}/release/rtailscale" "${binary}"
     echo "Installed: ${binary}"
 
 docker-build:
@@ -72,7 +72,7 @@ repair:
     docker compose down || true
     cargo build --release
     target_dir="${CARGO_TARGET_DIR:-target}"
-    install -m 755 "${target_dir}/release/tailscale" bin/tailscale 2>/dev/null || true
+    install -m 755 "${target_dir}/release/rtailscale" bin/rtailscale 2>/dev/null || true
     docker compose up -d --build
     echo "Repair complete — container restarted"
 
@@ -89,7 +89,7 @@ validate-skills:
 validate-plugin: validate-skills
 
 runtime-current:
-    bash scripts/check-runtime-current.sh --unit tailscale-mcp.service --service tailscale-mcp --expected-binary target/release/tailscale
+    bash scripts/check-runtime-current.sh --unit tailscale-mcp.service --service tailscale-mcp --expected-binary target/release/rtailscale
 
 # Run the mcporter integration smoke-test (requires running server + mcporter in PATH)
 test-mcporter:
@@ -130,12 +130,12 @@ build-plugin: release
     #!/bin/sh
     set -eu
     target_dir="${CARGO_TARGET_DIR:-target}"
-    if [ ! -x "$target_dir/release/tailscale" ] && [ -x ".cache/cargo/release/tailscale" ]; then
+    if [ ! -x "$target_dir/release/rtailscale" ] && [ -x ".cache/cargo/release/rtailscale" ]; then
       target_dir=".cache/cargo"
     fi
     mkdir -p bin plugins/tailscale/bin
-    install -m 755 "$target_dir/release/tailscale" bin/tailscale
-    install -m 755 "$target_dir/release/tailscale" plugins/tailscale/bin/tailscale
+    install -m 755 "$target_dir/release/rtailscale" bin/rtailscale
+    install -m 755 "$target_dir/release/rtailscale" plugins/tailscale/bin/rtailscale
 
 # Publish: bump version, tag, push (triggers crates.io + Docker publish)
 publish bump="patch":

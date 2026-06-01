@@ -34,11 +34,11 @@ export_option() {
   export "${env_name}=${value}"
 }
 
-ensure_tailscale_binary() {
+ensure_rtailscale_binary() {
   # Resolve the bundled rustscale MCP binary by absolute path. Do NOT rely on
   # `command -v tailscale` — that resolves to the system Tailscale CLI
   # (/usr/bin/tailscale), a different program with no `setup` subcommand.
-  local bundled="${CLAUDE_PLUGIN_ROOT}/bin/tailscale"
+  local bundled="${CLAUDE_PLUGIN_ROOT}/bin/rtailscale"
   if [[ -x "${bundled}" ]]; then
     TAILSCALE_BIN="${bundled}"
     return 0
@@ -67,7 +67,7 @@ main() {
   export_option TAILSCALE_TAILNET CLAUDE_PLUGIN_OPTION_TAILSCALE_TAILNET TAILSCALE_TAILNET
   export_option TAILSCALE_ALLOW_DESTRUCTIVE CLAUDE_PLUGIN_OPTION_ALLOW_DESTRUCTIVE TAILSCALE_ALLOW_DESTRUCTIVE
 
-  ensure_tailscale_binary
+  ensure_rtailscale_binary
   "${TAILSCALE_BIN}" setup plugin-hook "$@"
 }
 

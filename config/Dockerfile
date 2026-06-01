@@ -20,13 +20,13 @@ RUN --mount=type=cache,id=rustscale-cargo-registry,target=/usr/local/cargo/regis
     --mount=type=cache,id=rustscale-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=rustscale-cargo-target,target=/app/target,sharing=locked \
     touch src/main.rs && cargo build --release --locked -p rustscale && \
-    cp target/release/tailscale /usr/local/bin/tailscale-mcp
+    cp target/release/rtailscale /usr/local/bin/rtailscale-mcp
 
 # Runtime image
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates curl gosu && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local/bin/tailscale-mcp /usr/local/bin/tailscale-mcp
+COPY --from=builder /usr/local/bin/rtailscale-mcp /usr/local/bin/rtailscale-mcp
 
 # Create unprivileged service user and data directory
 RUN groupadd --gid 1000 rustscale && \

@@ -11,7 +11,7 @@ description = "Tailscale MCP server — REST API bridge"
 autobins = false
 
 [[bin]]
-name = "tailscale"
+name = "rtailscale"
 path = "src/main.rs"
 
 [dependencies]
