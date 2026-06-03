@@ -69,10 +69,9 @@ fn plugin_hook_maps_plugin_options_into_env() {
 
     let output = Command::new(tailscale_bin())
         .args(["--json", "setup", "plugin-hook", "--no-repair"])
-        .env_remove("TAILSCALE_MCP_HOME")
         .env_remove("TAILSCALE_MCP_PORT")
         .env("PATH", bin_dir.path())
-        .env("CLAUDE_PLUGIN_DATA", &appdata)
+        .env("TAILSCALE_MCP_HOME", &appdata)
         .env("CLAUDE_PLUGIN_OPTION_MCP_PORT", port.to_string())
         .output()
         .unwrap();

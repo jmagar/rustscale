@@ -174,14 +174,10 @@ fn install_self() -> Result<PathBuf> {
 /// contract. The server receives option values via `.mcp.json`'s
 /// `${user_config.*}` block, not the hook's process env.
 fn apply_plugin_options() {
-    // Map CLAUDE_PLUGIN_DATA -> TAILSCALE_MCP_HOME so appdata_dir() resolves to
-    // the plugin's data directory (matching the script's HOME export).
-    if let Some(v) = std::env::var_os("CLAUDE_PLUGIN_DATA") {
-        let s = v.to_string_lossy();
-        if !s.is_empty() && !s.contains('\n') && !s.contains('\r') {
-            std::env::set_var(APPDATA_ENV, v);
-        }
-    }
+    // CLAUDE_PLUGIN_DATA is intentionally NOT mapped to TAILSCALE_MCP_HOME: appdata
+    // resolves to the canonical ~/.tailscale-mcp/ (the same place the binary loads
+    // .env from via cli::load_dotenv), not the plugin's sandboxed data dir. An
+    // explicit TAILSCALE_MCP_HOME override is still honored by appdata_dir().
 
     // CLAUDE_PLUGIN_OPTION_<OPT> -> <TAILSCALE_ENVVAR>
     let map = [
